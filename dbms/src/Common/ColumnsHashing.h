@@ -406,7 +406,7 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
 {
     using Base = SingleColumnMethod;
 
-    static HashMethodContextPtr createCache(const HashMethodContext::Settings & settings)
+    static HashMethodContextPtr createContext(const HashMethodContext::Settings & settings)
     {
         return std::make_shared<LowCardinalityDictionaryCache>(settings);
     }
