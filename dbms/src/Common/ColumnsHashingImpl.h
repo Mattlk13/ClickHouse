@@ -20,27 +20,10 @@ struct LastElementCache
     bool empty = true;
     bool found = false;
 
-    void setValue(const Value & new_value)
-    {
-        value = new_value;
-        empty = false;
-        found = true;
-    }
+    bool check(const Value & value_) { return !empty && value == value_; }
 
     template <typename Key>
-    void setNotFound(const Key & key)
-    {
-        value.first = key;
-        empty = false;
-        found = false;
-    }
-
-    void setNotFound(const Value & value_)
-    {
-        value = value_;
-        empty = false;
-        found = false;
-    }
+    bool check(const Key & key) { return !empty && value.first == key; }
 };
 
 template <typename Data>
@@ -49,127 +32,101 @@ struct LastElementCache<Data, false>
     static constexpr bool consecutive_keys_optimization = false;
 };
 
-template <typename Value, typename Cache>
+template <typename Mapped>
 class EmplaceResultImpl
 {
-    bool inserted;
-public:
-    template <typename iterator>
-    EmplaceResultImpl(iterator & it, Cache & cache, bool inserted) : inserted(inserted)
-    {
-        if constexpr (Cache::consecutive_keys_optimization)
-            cache.setValue(*it);
-    }
-    bool isInserted() const { return inserted; }
-};
-
-template <typename First, typename Second, typename Cache>
-class EmplaceResultImpl<PairNoInit<First, Second>, Cache>
-{
-    using Value = PairNoInit<First, Second>;
-    Value & value;
-    Cache & cache;
+    Mapped & value;
+    Mapped & cached_value;
     bool inserted;
 
 public:
-    explicit EmplaceResultImpl(typename std::enable_if<Cache::consecutive_keys_optimization, Cache>::type & cache)
-        : value(cache.value), cache(cache), inserted(false) {}
-
-    EmplaceResultImpl(Value & value, Cache & cache, bool inserted) : value(value), cache(cache), inserted(inserted)
-    {
-        if constexpr (Cache::consecutive_keys_optimization)
-            cache.setValue(value);
-    }
+    EmplaceResultImpl(Mapped & value, Mapped & cached_value, bool inserted)
+            : value(value), cached_value(cached_value), inserted(inserted) {}
 
     bool isInserted() const { return inserted; }
     const auto & getMapped() const { return value.second; }
-
-    void setMapped(const Second & mapped)
-    {
-        value.second = mapped;
-
-        if constexpr (Cache::consecutive_keys_optimization)
-            cache.setValue(value);
-    }
+    void setMapped(const Mapped & mapped) { value = cached_value = mapped; }
 };
 
-template <typename Value, typename Cache>
+template <>
+class EmplaceResultImpl<void>
+{
+    bool inserted;
+
+public:
+    explicit EmplaceResultImpl(bool inserted) : inserted(inserted) {}
+    bool isInserted() const { return inserted; }
+};
+
+template <typename Mapped>
 class FindResultImpl
 {
     bool found;
+    Mapped value;
 
 public:
-    template <typename Key, typename iterator>
-    FindResultImpl(Key & key, iterator & it, Cache & cache, bool found) : found(found)
-    {
-        if constexpr (Cache::consecutive_keys_optimization)
-        {
-            if (found)
-                cache.setValue(*it);
-            else
-                cache.setNotFound(key);
-        }
-    }
-
+    FindResultImpl(Mapped value, bool found) : value(value), found(found) {}
     bool isFound() const { return found; }
+    const Mapped & getMapped() const { return value; }
 };
 
-template <typename First, typename Second, typename Cache>
-class FindResultImpl<PairNoInit<First, Second>, Cache>
+template <>
+class FindResultImpl<void>
 {
-    using Value = PairNoInit<First, Second>;
-    Value & value;
-    Cache & cache;
     bool found;
 
 public:
-    explicit FindResultImpl(typename std::enable_if<Cache::consecutive_keys_optimization, Cache>::type & cache)
-        : value(cache.value), cache(cache), found(cache.found) {}
-
-    FindResultImpl(First & key, Value * value_ptr, Cache & cache, bool found) : cache(cache), found(found)
-    {
-        if (found)
-            value = *value_ptr;
-        else
-            value.first = key;
-
-        if constexpr (Cache::consecutive_keys_optimization)
-        {
-            if (found)
-                cache.setValue(value);
-            else
-                cache.setNotFound(key);
-        }
-    }
-
+    explicit FindResultImpl(bool found) : found(found) {}
     bool isFound() const { return found; }
-    const auto & getMapped() const { return value.second; }
 };
 
-template <typename Value, bool consecutive_keys_optimization>
+template <typename Value, typename Mapped, bool consecutive_keys_optimization>
 struct HashMethodBase
 {
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
-    using EmplaceResult = EmplaceResultImpl<Value, Cache>;
-    using FindResult = FindResultImpl<Value, Cache>;
-
-    Cache cache;
+    using EmplaceResult = EmplaceResultImpl<Mapped>;
+    using FindResult = FindResultImpl<Mapped>;
+    static constexpr bool has_mapped = std::is_same<Mapped, void>::value;
 
 protected:
+    Cache cache;
+
     template <typename Data, typename Key>
     EmplaceResult emplaceKeyImpl(Key key, Data & data)
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {
-            if (!cache.empty && cache.found && cache.getKey() == key)
-                return EmplaceResult(cache);
+            if (cache.found && cache.check(key))
+            {
+                if constexpr (has_mapped)
+                    return EmplaceResult(cache.value, cache.value, false);
+                else
+                    return EmplaceResult(false);
+            }
         }
 
         bool inserted = false;
         typename Data::iterator it;
         data.emplace(key, it, inserted);
 
-        return EmplaceRes(*it, cache, inserted);
+        if constexpr (consecutive_keys_optimization)
+        {
+            cache.value = *it;
+            cache.empty = false;
+            cache.found = true;
+
+            if constexpr (has_mapped)
+                return EmplaceResult(it->second, cache.value.second, inserted);
+            else
+                return EmplaceResult(inserted);
+        }
+        else
+        {
+            if constexpr (has_mapped)
+                return EmplaceResult(it->second, it->second, inserted);
+            else
+                return EmplaceResult(inserted);
+        }
     }
 
     template <typename Data, typename Key>
@@ -177,16 +134,36 @@ protected:
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {
-            if (!cache.empty && cache.getKey() == key)
-                return FindRes(cache);
+            if (cache.check(key))
+            {
+                if constexpr (has_mapped)
+                    return FindResult(cache.value.second, cache.found);
+                else
+                    return FindResult(cache.found);
+            }
         }
 
         auto it = data.find(key);
+        bool found = it == data.end();
 
-        if (it == data.end())
-            return FindRes(key, nullptr, cache, false);
+        if constexpr (consecutive_keys_optimization)
+        {
+            cache.value = *it;
+            cache.empty = false;
+            cache.found = found;
+
+            if constexpr (has_mapped)
+                return FindResult(found ? it->second : Mapped(), found);
+            else
+                return FindResult(found);
+        }
         else
-            return FindRes(key, &(*it), cache, true);
+        {
+            if constexpr (has_mapped)
+                return FindResult(found ? it->second : Mapped(), found);
+            else
+                return EmplaceResult(found);
+        }
     }
 };
 

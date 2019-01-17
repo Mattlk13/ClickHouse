@@ -35,10 +35,10 @@ using HashMethodContextPtr = std::shared_ptr<HashMethodContext>;
 
 
 /// For the case where there is one numeric key.
-template <typename Value, typename FieldType>    /// UInt8/16/32/64 for any type with corresponding bit width.
-struct HashMethodOneNumber : public columns_hashing_impl::HashMethodBase<Value, true>
+template <typename Value, typename Mapped, typename FieldType>    /// UInt8/16/32/64 for any type with corresponding bit width.
+struct HashMethodOneNumber : public columns_hashing_impl::HashMethodBase<Value, Mapped, true>
 {
-    using Base = columns_hashing_impl::HashMethodBase<Value, true>;
+    using Base = columns_hashing_impl::HashMethodBase<Value, Mapped, true>;
     const char * vec;
 
     /// If the keys of a fixed length then key_sizes contains their lengths, empty otherwise.
@@ -88,10 +88,10 @@ protected:
 
 
 /// For the case where there is one string key.
-template <typename Value>
-struct HashMethodString : public columns_hashing_impl::HashMethodBase<Value, true>
+template <typename Value, typename Mapped>
+struct HashMethodString : public columns_hashing_impl::HashMethodBase<Value, Mapped, true>
 {
-    using Base = columns_hashing_impl::HashMethodBase<Value, true>;
+    using Base = columns_hashing_impl::HashMethodBase<Value, Mapped, true>;
     const IColumn::Offset * offsets;
     const UInt8 * chars;
 
@@ -111,7 +111,7 @@ struct HashMethodString : public columns_hashing_impl::HashMethodBase<Value, tru
     ALWAYS_INLINE typename Base::EmplaceResult emplaceKey(Data & data, size_t row, Arena & pool)
     {
         auto key = getKey(row);
-        auto result = emplaceKeyImpl(key, data);
+        auto result = Base::emplaceKeyImpl(key, data);
         if (result.isInserted())
         {
             if (key.size)
@@ -123,7 +123,7 @@ struct HashMethodString : public columns_hashing_impl::HashMethodBase<Value, tru
     template <typename Data>
     ALWAYS_INLINE typename Base::FindResult findKey(Data & data, size_t row, Arena & /*pool*/)
     {
-        return findKeyImpl(getKey(row), data);
+        return Base::findKeyImpl(getKey(row), data);
     }
 
     template <typename Data>
@@ -147,10 +147,10 @@ protected:
 
 
 /// For the case where there is one fixed-length string key.
-template <typename Value>
-struct HashMethodFixedString : public columns_hashing_impl::HashMethodBase<Value, true>
+template <typename Value, typename Mapped>
+struct HashMethodFixedString : public columns_hashing_impl::HashMethodBase<Value, Mapped, true>
 {
-    using Base = columns_hashing_impl::HashMethodBase<Value, true>;
+    using Base = columns_hashing_impl::HashMethodBase<Value, Mapped, true>;
     size_t n;
     const ColumnFixedString::Chars * chars;
 
@@ -180,7 +180,7 @@ struct HashMethodFixedString : public columns_hashing_impl::HashMethodBase<Value
     template <typename Data>
     ALWAYS_INLINE typename Base::FindResult findKey(Data & data, size_t row, Arena & /*pool*/)
     {
-        return findKeyImpl(getKey(row), data);
+        return Base::findKeyImpl(getKey(row), data);
     }
 
     template <typename Data>
@@ -254,34 +254,7 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
 {
     using Base = SingleColumnMethod;
 
-    template <typename T>
-    struct EmplaceResultImpl
-    {
-        T & value;
-        T & cache_value;
-        bool inserted;
-
-        EmplaceResultImpl(T & value, T & cache_value, bool inserted)
-            : value(value), cache_value(cache_value), inserted(inserted) {}
-
-        bool isInserted() const { return inserted; }
-        const auto & getMapped() const { return value; }
-        void setMapped(const T & mapped) { cache_value = value = mapped; }
-    };
-
-    template <typename T>
-    struct FindResultImpl
-    {
-        T mapped;
-        bool found;
-
-        FindResultImpl(T mapped, bool found) : mapped(mapped), found(found) {}
-
-        bool isFound() const { return found; }
-        const auto & getMapped() const { return mapped; }
-    };
-
-    enum DataCacheValue
+    enum class VisitValue
     {
         Empty = 0,
         Found = 1,
@@ -289,9 +262,14 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
     };
 
     static constexpr bool has_mapped = !std::is_same<Mapped, void>::value;
-    using DataCacheType = std::conditional_t<has_mapped, Mapped, DataCacheValue>;
-    using EmplaceResult = EmplaceResultImpl<DataCacheType>;
-    using FindResult = FindResultImpl<DataCacheType>;
+    using EmplaceResult = columns_hashing_impl::EmplaceResultImpl<Mapped>;
+    using FindResult = columns_hashing_impl::FindResultImpl<Mapped>;
+
+    template <typename T>
+    struct MappedCache : public PaddedPODArray<T> {};
+
+    template <>
+    struct MappedCache<void> {};
 
     static HashMethodContextPtr createContext(const HashMethodContext::Settings & settings)
     {
@@ -308,7 +286,8 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
     ColumnPtr dictionary_holder;
 
     /// Cache AggregateDataPtr for current column in order to decrease the number of hash table usages.
-    PaddedPODArray<DataCacheType> aggregate_data_cache;
+    MappedCache<Mapped> mapped_cache;
+    PaddedPODArray<VisitValue> visit_cache;
 
     /// If initialized column is nullable.
     bool is_nullable = false;
@@ -382,13 +361,11 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
             }
         }
 
-        DataCacheType default_data;
         if constexpr (has_mapped)
-            default_data = nullptr;
-        else
-            default_data = Empty;
+            mapped_cache.resize(key_columns[0]->size());
 
-        aggregate_data_cache.assign(key_columns[0]->size(), default_data);
+        VisitValue empty(VisitValue::Empty);
+        visit_cache.assingn(key_columns[0]->size(), empty);
 
         size_of_index_type = column->getSizeOfIndexType();
         positions = column->getIndexesPtr().get();
@@ -418,10 +395,21 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
         size_t row = getIndexAt(row_);
 
         if (is_nullable && row == 0)
-            return EmplaceResult(data.getNullKeyData(), aggregate_data_cache[0], !data.hasNullKeyData());
+        {
+            visit_cache = VisitValue ::Found;
+            if constexpr (has_mapped)
+                return EmplaceResult(data.getNullKeyData(), mapped_cache[0], !data.hasNullKeyData());
+            else
+                return EmplaceResult(!data.hasNullKeyData());
+        }
 
-        if (aggregate_data_cache[row])
-            return EmplaceResult(aggregate_data_cache[row], aggregate_data_cache[row], false);
+        if (visit_cache[row] == VisitValue::Found)
+        {
+            if constexpr (has_mapped)
+                return EmplaceResult(mapped_cache[row], mapped_cache[row], false);
+            else
+                return EmplaceResult(false);
+        }
 
         auto key = getKey(row_);
 
@@ -431,20 +419,15 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
         else
             data.emplace(key, it, inserted);
 
+        visit_cache[row] = VisitValue::Found;
+
         if (inserted)
             Base::onNewKey(*it, pool);
-        else
-        {
-            if constexpr (has_mapped)
-                aggregate_data_cache[row] = it->second;
-            else
-                aggregate_data_cache[row] = Found;
-        }
 
         if constexpr (has_mapped)
-            return EmplaceResult(it->second, aggregate_data_cache[row], inserted);
+            return EmplaceResult(it->second, mapped_cache[row], inserted);
         else
-            return EmplaceResult(aggregate_data_cache[row], aggregate_data_cache[row], inserted);
+            return EmplaceResult(inserted);
     }
 
     ALWAYS_INLINE bool isNullAt(size_t i)
@@ -463,13 +446,18 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
         if (is_nullable && row == 0)
         {
             if constexpr (has_mapped)
-                return FindResult(data.hasNullKeyData() ? data.getNullKeyData() : nullptr, data.hasNullKeyData());
+                return FindResult(data.hasNullKeyData() ? data.getNullKeyData() : Mapped(), data.hasNullKeyData());
             else
-                return FindResult(data.hasNullKeyData() ? Found : NotFound, data.hasNullKeyData());
+                return FindResult(data.hasNullKeyData());
         }
 
-        if (aggregate_data_cache[row])
-            return FindResult(aggregate_data_cache[row], false);
+        if (visit_cache[row] != VisitValue::Empty)
+        {
+            if constexpr (has_mapped)
+                return FindResult(mapped_cache[row], visit_cache[row] == VisitValue::Found);
+            else
+                return FindResult(visit_cache[row] == VisitValue::Found);
+        }
 
         auto key = getKey(row_);
 
@@ -480,13 +468,18 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
             it = data.find(key);
 
         found = it != data.end();
+        visit_cache[row] = found ? VisitValue::Found : VisitValue::NotFound;
 
         if constexpr (has_mapped)
-            aggregate_data_cache[row] = found ? it->second : nullptr;
-        else
-            aggregate_data_cache[row] = found ? Found : NotFound;
+        {
+            if (found)
+                mapped_cache[row] = it->second;
+        }
 
-        return FindResult(aggregate_data_cache[row], found);
+        if constexpr (has_mapped)
+            return FindResult(mapped_cache[row], found);
+        else
+            return FindResult(found);
     }
 
     template <typename Data>
@@ -514,10 +507,10 @@ template <>
 struct LowCardinalityKeys<false> {};
 
 /// For the case where all keys are of fixed length, and they fit in N (for example, 128) bits.
-template <typename Key, typename Value, bool has_nullable_keys_ = false, bool has_low_cardinality_ = false>
+template <typename Value, typename Key, typename Mapped, bool has_nullable_keys_ = false, bool has_low_cardinality_ = false>
 struct HashMethodKeysFixed
     : private columns_hashing_impl::BaseStateKeysFixed<Key, has_nullable_keys_>
-    , public columns_hashing_impl::HashMethodBase<Value, true>
+    , public columns_hashing_impl::HashMethodBase<Value, Mapped, true>
 {
     static constexpr bool has_nullable_keys = has_nullable_keys_;
     static constexpr bool has_low_cardinality = has_low_cardinality_;
@@ -527,7 +520,7 @@ struct HashMethodKeysFixed
     size_t keys_size;
 
     using Base = columns_hashing_impl::BaseStateKeysFixed<Key, has_nullable_keys>;
-    using BaseHashed = columns_hashing_impl::HashMethodBase<Value, true>;
+    using BaseHashed = columns_hashing_impl::HashMethodBase<Value, Mapped, true>;
 
     HashMethodKeysFixed(const ColumnRawPtrs & key_columns, const Sizes & key_sizes, const HashMethodContextPtr &)
         : key_sizes(std::move(key_sizes)), keys_size(key_columns.size())
@@ -596,10 +589,10 @@ struct HashMethodKeysFixed
   * That is, for example, for strings, it contains first the serialized length of the string, and then the bytes.
   * Therefore, when aggregating by several strings, there is no ambiguity.
   */
-template <typename Value>
-struct HashMethodSerialized : public columns_hashing_impl::HashMethodBase<Value, false>
+template <typename Value, typename Mapped>
+struct HashMethodSerialized : public columns_hashing_impl::HashMethodBase<Value, Mapped, false>
 {
-    using Base = columns_hashing_impl::HashMethodBase<Value, false>;
+    using Base = columns_hashing_impl::HashMethodBase<Value, Mapped, false>;
     ColumnRawPtrs key_columns;
     size_t keys_size;
 
