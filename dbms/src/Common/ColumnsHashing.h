@@ -2,13 +2,16 @@
 
 
 #include <Common/ColumnsHashingImpl.h>
-
-#include <memory>
-#include <Core/Defines.h>
 #include <Common/Arena.h>
-#include <Common/HashTable/HashMap.h>
 #include <Common/LRUCache.h>
 #include <common/unaligned.h>
+
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnLowCardinality.h>
+
+#include <Core/Defines.h>
+#include <memory>
 
 namespace DB
 {
