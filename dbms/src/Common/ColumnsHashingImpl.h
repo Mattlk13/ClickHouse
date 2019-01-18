@@ -95,6 +95,7 @@ protected:
     {
         if constexpr (has_mapped && consecutive_keys_optimization)
         {
+            /// Init PairNoInit elements.
             cache.value.second = Mapped();
             using Key = decltype(cache.value.first);
             cache.value.first = Key();
@@ -166,7 +167,7 @@ protected:
             else
             {
                 if constexpr (has_mapped)
-                    cache.value = Value(key, Mapped());
+                    cache.value.first = key;
                 else
                     cache.value = key;
             }
