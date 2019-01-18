@@ -93,7 +93,7 @@ protected:
 
     HashMethodBase()
     {
-        if constexpr (has_mapped)
+        if constexpr (has_mapped && consecutive_keys_optimization)
             cache.value.second = Mapped();
     }
 
