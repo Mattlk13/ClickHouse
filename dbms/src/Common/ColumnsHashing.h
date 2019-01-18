@@ -62,7 +62,8 @@ struct HashMethodOneNumber : public columns_hashing_impl::HashMethodBase<Value, 
         size_t row, /// From which row of the block insert the key
         Arena & /*pool*/) /// For Serialized method, key may be placed in pool.
     {
-        return Base::emplaceKeyImpl(getKey(row), data);
+        typename Data::iterator it;
+        return Base::emplaceKeyImpl(getKey(row), data, it);
     }
 
     /// Find key into HashTable or HashMap. If Data is HashMap and key was found, returns ptr to value, otherwise nullptr.
@@ -114,11 +115,12 @@ struct HashMethodString : public columns_hashing_impl::HashMethodBase<Value, Map
     ALWAYS_INLINE typename Base::EmplaceResult emplaceKey(Data & data, size_t row, Arena & pool)
     {
         auto key = getKey(row);
-        auto result = Base::emplaceKeyImpl(key, data);
+        typename Data::iterator it;
+        auto result = Base::emplaceKeyImpl(key, data, it);
         if (result.isInserted())
         {
             if (key.size)
-                key.data = pool.insert(key.data, key.size);
+                it->first.data = pool.insert(key.data, key.size);
         }
         return result;
     }
@@ -173,9 +175,10 @@ struct HashMethodFixedString : public columns_hashing_impl::HashMethodBase<Value
     ALWAYS_INLINE typename Base::EmplaceResult emplaceKey(Data & data, size_t row, Arena & pool)
     {
         auto key = getKey(row);
-        auto res = Base::emplaceKeyImpl(key, data);
+        typename Data::iterator it;
+        auto res = Base::emplaceKeyImpl(key, data, it);
         if (res.isInserted())
-            key.data = pool.insert(key.data, key.size);
+            it->first.data = pool.insert(key.data, key.size);
 
         return res;
     }
@@ -567,7 +570,8 @@ struct HashMethodKeysFixed
     template <typename Data>
     ALWAYS_INLINE typename BaseHashed::EmplaceResult emplaceKey(Data & data, size_t row, Arena & /*pool*/)
     {
-        return BaseHashed::emplaceKeyImpl(getKey(row), data);
+        typename Data::iterator it;
+        return BaseHashed::emplaceKeyImpl(getKey(row), data, it);
     }
 
     template <typename Data>
@@ -604,7 +608,8 @@ struct HashMethodSerialized : public columns_hashing_impl::HashMethodBase<Value,
     ALWAYS_INLINE typename Base::EmplaceResult emplaceKey(Data & data, size_t row, Arena & pool)
     {
         auto key = getKey(row, pool);
-        auto res = Base::emplaceKeyImpl(key, data);
+        typename Data::iterator it;
+        auto res = Base::emplaceKeyImpl(key, data, it);
         if (!res.isInserted())
             pool.rollback(key.size);
 

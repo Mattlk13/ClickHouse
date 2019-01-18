@@ -103,7 +103,7 @@ protected:
     }
 
     template <typename Data, typename Key>
-    ALWAYS_INLINE EmplaceResult emplaceKeyImpl(Key key, Data & data)
+    ALWAYS_INLINE EmplaceResult emplaceKeyImpl(Key key, Data & data, typename Data::iterator & it)
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {
@@ -117,7 +117,6 @@ protected:
         }
 
         bool inserted = false;
-        typename Data::iterator it;
         data.emplace(key, it, inserted);
 
         if constexpr (consecutive_keys_optimization)
