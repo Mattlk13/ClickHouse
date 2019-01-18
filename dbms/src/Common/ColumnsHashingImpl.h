@@ -168,6 +168,13 @@ protected:
 };
 
 
+template <typename T>
+struct MappedCache : public PaddedPODArray<T> {};
+
+template <>
+struct MappedCache<void> {};
+
+
 /// This class is designed to provide the functionality that is required for
 /// supporting nullable keys in HashMethodKeysFixed. If there are
 /// no nullable keys, this class is merely implemented as an empty shell.

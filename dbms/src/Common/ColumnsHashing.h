@@ -251,6 +251,7 @@ private:
     Cache cache;
 };
 
+
 /// Single low cardinality column.
 template <typename SingleColumnMethod, typename Mapped, bool use_cache>
 struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
@@ -268,12 +269,6 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
     using EmplaceResult = columns_hashing_impl::EmplaceResultImpl<Mapped>;
     using FindResult = columns_hashing_impl::FindResultImpl<Mapped>;
 
-    template <typename T>
-    struct MappedCache : public PaddedPODArray<T> {};
-
-    template <>
-    struct MappedCache<void> {};
-
     static HashMethodContextPtr createContext(const HashMethodContext::Settings & settings)
     {
         return std::make_shared<LowCardinalityDictionaryCache>(settings);
@@ -289,7 +284,7 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
     ColumnPtr dictionary_holder;
 
     /// Cache AggregateDataPtr for current column in order to decrease the number of hash table usages.
-    MappedCache<Mapped> mapped_cache;
+    columns_hashing_impl::MappedCache<Mapped> mapped_cache;
     PaddedPODArray<VisitValue> visit_cache;
 
     /// If initialized column is nullable.
@@ -393,7 +388,7 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
     }
 
     template <typename Data>
-    ALWAYS_INLINE EmplaceResult emplaceKey(Data & data, size_t row_, bool & inserted, Arena & pool)
+    ALWAYS_INLINE EmplaceResult emplaceKey(Data & data, size_t row_, Arena & pool)
     {
         size_t row = getIndexAt(row_);
 
@@ -416,6 +411,7 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
 
         auto key = getKey(row_);
 
+        bool inserted = false;
         typename Data::iterator it;
         if (saved_hash)
             data.emplace(key, it, inserted, saved_hash[row]);
@@ -442,7 +438,7 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
     }
 
     template <typename Data>
-    ALWAYS_INLINE FindResult findFromRow(Data & data, size_t row_, bool & found, Arena &)
+    ALWAYS_INLINE FindResult findFromRow(Data & data, size_t row_, Arena &)
     {
         size_t row = getIndexAt(row_);
 
@@ -470,7 +466,7 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
         else
             it = data.find(key);
 
-        found = it != data.end();
+        bool found = it != data.end();
         visit_cache[row] = found ? VisitValue::Found : VisitValue::NotFound;
 
         if constexpr (has_mapped)
