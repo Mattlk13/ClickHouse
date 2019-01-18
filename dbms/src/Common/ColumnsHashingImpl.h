@@ -146,7 +146,6 @@ protected:
 
         if constexpr (consecutive_keys_optimization)
         {
-            cache.empty = false;
             cache.found = found;
 
             if (found)
