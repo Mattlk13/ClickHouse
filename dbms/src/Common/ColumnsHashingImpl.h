@@ -94,7 +94,11 @@ protected:
     HashMethodBase()
     {
         if constexpr (has_mapped && consecutive_keys_optimization)
+        {
             cache.value.second = Mapped();
+            using Key = decltype(cache.value.first);
+            cache.value.first = Key();
+        }
     }
 
     template <typename Data, typename Key>
