@@ -122,14 +122,14 @@ protected:
             cache.empty = false;
 
             if constexpr (has_mapped)
-                return EmplaceResult(it.second, cache.value.second, inserted);
+                return EmplaceResult(it->second, cache.value.second, inserted);
             else
                 return EmplaceResult(inserted);
         }
         else
         {
             if constexpr (has_mapped)
-                return EmplaceResult(it.second, it.second, inserted);
+                return EmplaceResult(it->second, it->second, inserted);
             else
                 return EmplaceResult(inserted);
         }
@@ -168,14 +168,14 @@ protected:
             }
 
             if constexpr (has_mapped)
-                return FindResult(found ? it.second : Mapped(), found);
+                return FindResult(found ? it->second : Mapped(), found);
             else
                 return FindResult(found);
         }
         else
         {
             if constexpr (has_mapped)
-                return FindResult(found ? it.second : Mapped(), found);
+                return FindResult(found ? it->second : Mapped(), found);
             else
                 return EmplaceResult(found);
         }
