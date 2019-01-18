@@ -44,7 +44,7 @@ public:
             : value(value), cached_value(cached_value), inserted(inserted) {}
 
     bool isInserted() const { return inserted; }
-    const auto & getMapped() const { return value.second; }
+    const auto & getMapped() const { return value; }
     void setMapped(const Mapped & mapped) { value = cached_value = mapped; }
 };
 
