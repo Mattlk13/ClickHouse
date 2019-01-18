@@ -118,25 +118,20 @@ protected:
 
         bool inserted = false;
         data.emplace(key, it, inserted);
+        Mapped * cached = &it->second;
 
         if constexpr (consecutive_keys_optimization)
         {
             cache.value = *it;
             cache.found = true;
             cache.empty = false;
+            cached = &cache.value.second;
+        }
 
-            if constexpr (has_mapped)
-                return EmplaceResult(it->second, cache.value.second, inserted);
-            else
-                return EmplaceResult(inserted);
-        }
+        if constexpr (has_mapped)
+            return EmplaceResult(it->second, *cached, inserted);
         else
-        {
-            if constexpr (has_mapped)
-                return EmplaceResult(it->second, it->second, inserted);
-            else
-                return EmplaceResult(inserted);
-        }
+            return EmplaceResult(inserted);
     }
 
     template <typename Data, typename Key>
@@ -170,19 +165,12 @@ protected:
                 else
                     cache.value = key;
             }
+        }
 
-            if constexpr (has_mapped)
-                return FindResult(found ? it->second : Mapped(), found);
-            else
-                return FindResult(found);
-        }
+        if constexpr (has_mapped)
+            return FindResult(found ? it->second : Mapped(), found);
         else
-        {
-            if constexpr (has_mapped)
-                return FindResult(found ? it->second : Mapped(), found);
-            else
-                return EmplaceResult(found);
-        }
+            return FindResult(found);
     }
 };
 

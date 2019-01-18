@@ -35,8 +35,6 @@ public:
 using HashMethodContextPtr = std::shared_ptr<HashMethodContext>;
 
 
-
-
 /// For the case where there is one numeric key.
 template <typename Value, typename Mapped, typename FieldType>    /// UInt8/16/32/64 for any type with corresponding bit width.
 struct HashMethodOneNumber : public columns_hashing_impl::HashMethodBase<Value, Mapped, true>
