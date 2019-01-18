@@ -1954,7 +1954,6 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
     {
         AggregateDataPtr aggregate_data = nullptr;
 
-
         if (!no_more_keys)
         {
             auto emplace_result = state.emplaceKey(data, i, *aggregates_pool);

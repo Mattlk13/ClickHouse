@@ -144,13 +144,22 @@ protected:
         }
 
         auto it = data.find(key);
-        bool found = it == data.end();
+        bool found = it != data.end();
 
         if constexpr (consecutive_keys_optimization)
         {
-            cache.value = *it;
             cache.empty = false;
             cache.found = found;
+
+            if (found)
+                cache.value = *it;
+            else
+            {
+                if constexpr (has_mapped)
+                    cache.value.first = key;
+                else
+                    cache.value = key;
+            }
 
             if constexpr (has_mapped)
                 return FindResult(found ? it->second : Mapped(), found);
