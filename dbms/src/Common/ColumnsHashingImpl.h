@@ -16,13 +16,14 @@ template <typename Value, bool consecutive_keys_optimization_>
 struct LastElementCache
 {
     static constexpr bool consecutive_keys_optimization = consecutive_keys_optimization_;
-    std::optional<Value> value;
+    Value value;
+    bool empty = true;
     bool found = false;
 
-    bool check(const Value & value_) { return value && *value == value_; }
+    bool check(const Value & value_) { return !empty && value == value_; }
 
     template <typename Key>
-    bool check(const Key & key) { return value && value->first == key; }
+    bool check(const Key & key) { return !empty && value.first == key; }
 };
 
 template <typename Data>
@@ -82,13 +83,19 @@ public:
 template <typename Value, typename Mapped, bool consecutive_keys_optimization>
 struct HashMethodBase
 {
-    using Cache = LastElementCache<Value, consecutive_keys_optimization>;
     using EmplaceResult = EmplaceResultImpl<Mapped>;
     using FindResult = FindResultImpl<Mapped>;
     static constexpr bool has_mapped = !std::is_same<Mapped, void>::value;
+    using Cache = LastElementCache<Value, consecutive_keys_optimization>;
 
 protected:
     Cache cache;
+
+    HashMethodBase()
+    {
+        if constexpr (has_mapped)
+            cache.value.second = Mapped();
+    }
 
     template <typename Data, typename Key>
     ALWAYS_INLINE EmplaceResult emplaceKeyImpl(Key key, Data & data)
@@ -98,7 +105,7 @@ protected:
             if (cache.found && cache.check(key))
             {
                 if constexpr (has_mapped)
-                    return EmplaceResult(cache.value->second, cache.value->second, false);
+                    return EmplaceResult(cache.value.second, cache.value.second, false);
                 else
                     return EmplaceResult(false);
             }
@@ -112,16 +119,17 @@ protected:
         {
             cache.value = *it;
             cache.found = true;
+            cache.empty = false;
 
             if constexpr (has_mapped)
-                return EmplaceResult(it->second, cache.value->second, inserted);
+                return EmplaceResult(it.second, cache.value.second, inserted);
             else
                 return EmplaceResult(inserted);
         }
         else
         {
             if constexpr (has_mapped)
-                return EmplaceResult(it->second, it->second, inserted);
+                return EmplaceResult(it.second, it.second, inserted);
             else
                 return EmplaceResult(inserted);
         }
@@ -135,7 +143,7 @@ protected:
             if (cache.check(key))
             {
                 if constexpr (has_mapped)
-                    return FindResult(cache.found ? cache.value->second : Mapped(), cache.found);
+                    return FindResult(cache.found ? cache.value.second : Mapped(), cache.found);
                 else
                     return FindResult(cache.found);
             }
@@ -147,6 +155,7 @@ protected:
         if constexpr (consecutive_keys_optimization)
         {
             cache.found = found;
+            cache.empty = false;
 
             if (found)
                 cache.value = *it;
@@ -159,14 +168,14 @@ protected:
             }
 
             if constexpr (has_mapped)
-                return FindResult(found ? it->second : Mapped(), found);
+                return FindResult(found ? it.second : Mapped(), found);
             else
                 return FindResult(found);
         }
         else
         {
             if constexpr (has_mapped)
-                return FindResult(found ? it->second : Mapped(), found);
+                return FindResult(found ? it.second : Mapped(), found);
             else
                 return EmplaceResult(found);
         }
