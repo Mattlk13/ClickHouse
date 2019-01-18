@@ -61,8 +61,8 @@ public:
 template <typename Mapped>
 class FindResultImpl
 {
-    bool found;
     Mapped value;
+    bool found;
 
 public:
     FindResultImpl(Mapped value, bool found) : value(value), found(found) {}
