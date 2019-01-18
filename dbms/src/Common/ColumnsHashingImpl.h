@@ -20,10 +20,10 @@ struct LastElementCache
     bool empty = true;
     bool found = false;
 
-    bool check(const Value & value_) { return !empty && value == value_; }
+    bool check(const Value & value_) { return !empty && found && value == value_; }
 
     template <typename Key>
-    bool check(const Key & key) { return !empty && value.first == key; }
+    bool check(const Key & key) { return !empty && found && value.first == key; }
 };
 
 template <typename Data>
