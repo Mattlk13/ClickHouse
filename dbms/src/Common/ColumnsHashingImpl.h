@@ -86,7 +86,7 @@ struct HashMethodBase
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
     using EmplaceResult = EmplaceResultImpl<Mapped>;
     using FindResult = FindResultImpl<Mapped>;
-    static constexpr bool has_mapped = std::is_same<Mapped, void>::value;
+    static constexpr bool has_mapped = !std::is_same<Mapped, void>::value;
 
 protected:
     Cache cache;
