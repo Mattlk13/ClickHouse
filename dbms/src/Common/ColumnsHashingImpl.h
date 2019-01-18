@@ -92,7 +92,7 @@ protected:
     Cache cache;
 
     template <typename Data, typename Key>
-    EmplaceResult emplaceKeyImpl(Key key, Data & data)
+    ALWAYS_INLINE EmplaceResult emplaceKeyImpl(Key key, Data & data)
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {
@@ -130,14 +130,14 @@ protected:
     }
 
     template <typename Data, typename Key>
-    FindResult findKeyImpl(Key key, Data & data)
+    ALWAYS_INLINE FindResult findKeyImpl(Key key, Data & data)
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {
             if (cache.check(key))
             {
                 if constexpr (has_mapped)
-                    return FindResult(cache.value.second, cache.found);
+                    return FindResult(cache.found ? cache.value.second : Mapped(), cache.found);
                 else
                     return FindResult(cache.found);
             }
