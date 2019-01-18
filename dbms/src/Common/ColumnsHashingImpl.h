@@ -99,7 +99,7 @@ protected:
             if (cache.found && cache.check(key))
             {
                 if constexpr (has_mapped)
-                    return EmplaceResult(cache.value, cache.value, false);
+                    return EmplaceResult(cache.value.second, cache.value.second, false);
                 else
                     return EmplaceResult(false);
             }
