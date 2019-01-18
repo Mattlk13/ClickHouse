@@ -363,7 +363,7 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
             mapped_cache.resize(key_columns[0]->size());
 
         VisitValue empty(VisitValue::Empty);
-        visit_cache.assingn(key_columns[0]->size(), empty);
+        visit_cache.assign(key_columns[0]->size(), empty);
 
         size_of_index_type = column->getSizeOfIndexType();
         positions = column->getIndexesPtr().get();
@@ -394,7 +394,7 @@ struct HashMethodSingleLowCardinalityColumn : public SingleColumnMethod
 
         if (is_nullable && row == 0)
         {
-            visit_cache = VisitValue ::Found;
+            visit_cache[row] = VisitValue::Found;
             if constexpr (has_mapped)
                 return EmplaceResult(data.getNullKeyData(), mapped_cache[0], !data.hasNullKeyData());
             else
