@@ -16,14 +16,13 @@ template <typename Value, bool consecutive_keys_optimization_>
 struct LastElementCache
 {
     static constexpr bool consecutive_keys_optimization = consecutive_keys_optimization_;
-    Value value;
-    bool empty = true;
+    std::optional<Value> value;
     bool found = false;
 
-    bool check(const Value & value_) { return !empty && found && value == value_; }
+    bool check(const Value & value_) { return value && *value == value_; }
 
     template <typename Key>
-    bool check(const Key & key) { return !empty && found && value.first == key; }
+    bool check(const Key & key) { return value && value->first == key; }
 };
 
 template <typename Data>
@@ -99,7 +98,7 @@ protected:
             if (cache.found && cache.check(key))
             {
                 if constexpr (has_mapped)
-                    return EmplaceResult(cache.value.second, cache.value.second, false);
+                    return EmplaceResult(cache.value->second, cache.value->second, false);
                 else
                     return EmplaceResult(false);
             }
@@ -112,11 +111,10 @@ protected:
         if constexpr (consecutive_keys_optimization)
         {
             cache.value = *it;
-            cache.empty = false;
             cache.found = true;
 
             if constexpr (has_mapped)
-                return EmplaceResult(it->second, cache.value.second, inserted);
+                return EmplaceResult(it->second, cache.value->second, inserted);
             else
                 return EmplaceResult(inserted);
         }
@@ -137,7 +135,7 @@ protected:
             if (cache.check(key))
             {
                 if constexpr (has_mapped)
-                    return FindResult(cache.found ? cache.value.second : Mapped(), cache.found);
+                    return FindResult(cache.found ? cache.value->second : Mapped(), cache.found);
                 else
                     return FindResult(cache.found);
             }
@@ -156,7 +154,7 @@ protected:
             else
             {
                 if constexpr (has_mapped)
-                    cache.value.first = key;
+                    cache.value = Value(key, Mapped());
                 else
                     cache.value = key;
             }
