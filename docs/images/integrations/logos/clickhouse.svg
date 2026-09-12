@@ -1,8 +1,1 @@
-<svg width="97" height="97" viewBox="0 0 97 97" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="97" height="97" fill="white"/>
-  <rect x="7.57269" y="7.57263" width="9.08691" height="81.7821" rx="0.955829" fill="#000000"/>
-  <rect x="25.7476" y="7.57263" width="9.08691" height="81.7821" rx="0.955829" fill="#000000"/>
-  <rect x="43.9224" y="7.57263" width="9.08691" height="81.7821" rx="0.955829" fill="#000000"/>
-  <rect x="62.0927" y="7.57263" width="9.08691" height="81.7821" rx="0.955829" fill="#000000"/>
-  <rect x="80.2721" y="39.3785" width="9.0869" height="18.1738" rx="0.955829" fill="#000000"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="97" height="97" fill="none" viewBox="0 0 97 97"><rect width="97" height="97" fill="#fff"/><rect width="9.087" height="81.782" x="7.573" y="7.573" fill="#000" rx=".956"/><rect width="9.087" height="81.782" x="25.748" y="7.573" fill="#000" rx=".956"/><rect width="9.087" height="81.782" x="43.922" y="7.573" fill="#000" rx=".956"/><rect width="9.087" height="81.782" x="62.093" y="7.573" fill="#000" rx=".956"/><rect width="9.087" height="18.174" x="80.272" y="39.379" fill="#000" rx=".956"/></svg>
